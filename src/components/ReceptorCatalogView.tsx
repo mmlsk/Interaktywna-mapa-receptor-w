@@ -168,6 +168,40 @@ export const ReceptorCatalogView: React.FC<ReceptorCatalogViewProps> = ({
           ))}
         </div>
 
+        <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 text-xs items-center">
+          <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mr-1">
+            Rodzina Neuroprzekaźnika:
+          </span>
+          {[
+            { id: 'all', label: 'Wszystkie' },
+            { id: 'glutamate', label: 'Glutaminian' },
+            { id: 'gaba', label: 'GABA' },
+            { id: 'glycine', label: 'Glicyna' },
+            { id: 'dopamine', label: 'Dopamina' },
+            { id: 'serotonin', label: 'Serotonina' },
+            { id: 'acetylcholine', label: 'Acetylocholina' },
+            { id: 'norepinephrine', label: 'Noradrenalina' },
+            { id: 'histamine', label: 'Histamina' },
+            { id: 'opioid', label: 'Opioidowa' },
+            { id: 'cannabinoid', label: 'Kannabinoidowa' },
+            { id: 'purinergic', label: 'Purynergiczna' },
+            { id: 'neuropeptide', label: 'Neuropeptydowa' },
+            { id: 'neurotrophin', label: 'Neurotroficzna' }
+          ].map(fam => (
+            <button
+              key={fam.id}
+              onClick={() => setSelectedFamily(fam.id as any)}
+              className={`px-2.5 py-1 rounded-lg font-medium transition-all ${
+                selectedFamily === fam.id
+                  ? 'bg-emerald-600 text-white shadow-xs font-semibold'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
+            >
+              {fam.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex flex-wrap gap-2 text-xs items-center">
           <span className="text-slate-400 font-bold uppercase tracking-wider text-[10px] mr-1">
             Lokalizacja Synaptyczna:

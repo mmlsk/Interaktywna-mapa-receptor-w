@@ -285,9 +285,9 @@ export const RECEPTORS_DATABASE: ReceptorInfo[] = [
         description: 'Potencjał wywołany przez GABA_A uniemożliwia depolaryzację wymaganą do usunięcia jonu Mg2+ z kanału NMDA.'
       },
       {
-        partnerReceptor: 'd5',
+        partnerReceptor: 'd1',
         nature: 'scaffold',
-        description: 'Receptor D5 fizycznie asocjuje z drugą wewnątrzkomórkową pętlą podjednostki γ2 receptora GABA_A, modulując prądy hamujące.'
+        description: 'Receptor D5 (blisko spokrewniony z D1, rodzina D1-like; ta baza nie modeluje D5 jako osobnego wpisu) fizycznie asocjuje z drugą wewnątrzkomórkową pętlą podjednostki γ2 receptora GABA_A, modulując prądy hamujące.'
       }
     ],
     pharmacology: {
@@ -451,7 +451,7 @@ export const RECEPTORS_DATABASE: ReceptorInfo[] = [
     },
     crossTalkAndInteractions: [
       {
-        partnerReceptor: 'a2a',
+        partnerReceptor: 'a2a_adenosine',
         nature: 'heterodimer',
         description: 'Tworzy heterodimer A2A-D2 w prążkowiu. Aktywacja A2A przez adenozynę zmniejsza powinowactwo dopaminy do D2 (antagonizm czynnościowy).'
       },
@@ -689,7 +689,7 @@ export const RECEPTORS_DATABASE: ReceptorInfo[] = [
     },
     crossTalkAndInteractions: [
       {
-        partnerReceptor: 'p2x7',
+        partnerReceptor: 'p2x7_purinergic',
         nature: 'antagonism',
         description: 'Aktywacja α7 na mikrogleju hamuje aktywację inflamasomu NLRP3 wywoływaną przez purynoreceptor P2X7.'
       }
@@ -841,7 +841,7 @@ export const RECEPTORS_DATABASE: ReceptorInfo[] = [
     },
     crossTalkAndInteractions: [
       {
-        partnerReceptor: 'beta1_adrenergic',
+        partnerReceptor: 'beta_adrenergic',
         nature: 'antagonism',
         description: 'W korze przedczołowej umiarkowane stężenie NA działa na α2A (skupienie uwagi), podczas gdy wysoki stres zalewa receptory β1 (cAMP rośnie, otwiera HCN, rozpraszając uwagę).'
       }
@@ -1044,7 +1044,7 @@ export const RECEPTORS_DATABASE: ReceptorInfo[] = [
     },
     crossTalkAndInteractions: [
       {
-        partnerReceptor: 'a2a',
+        partnerReceptor: 'a2a_adenosine',
         nature: 'antagonism',
         description: 'A1 (Gi) wygasza transmisję, podczas gdy A2A (Gs) stymuluje wybrane obwody prążkowia.'
       }
