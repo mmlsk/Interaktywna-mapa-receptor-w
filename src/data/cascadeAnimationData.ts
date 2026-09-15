@@ -27,6 +27,160 @@ export interface FlowPath {
   description: string;
 }
 
+export type MessengerType = 
+  | 'ion' 
+  | 'second_messenger' 
+  | 'neurotransmitter' 
+  | 'g_protein' 
+  | 'protein_kinase';
+
+export interface MessengerKineticProfile {
+  type: MessengerType;
+  label: string;
+  shortLabel: string;
+  speedFactor: number; // Multiplier on durationSec: lower = faster movement, higher = slower movement
+  leadRadius: number; // SVG circle radius for leading molecule
+  secondaryRadius: number; // SVG circle radius for staggered secondary molecule
+  trailRadius: number; // SVG circle radius for trailing pulse
+  quiescentRadius: number; // SVG circle radius when pathway is inactive
+  strokeWidth: number;
+  glowFilter?: string;
+  kineticsDescription: string;
+}
+
+export function getMessengerKineticProfile(path: FlowPath): MessengerKineticProfile {
+  const isKinaseOrEnzyme = 
+    path.substance === 'erk' || 
+    path.particleSymbol === 'ERK' || 
+    path.particleSymbol === 'pERK' || 
+    path.particleSymbol === 'Ⓟ' || 
+    path.particleSymbol === '✂Ⓟ' || 
+    path.particleSymbol === '🔒' || 
+    path.particleSymbol === 'mTOR' || 
+    path.particleSymbol === 'PLCγ' || 
+    path.particleSymbol === 'PKA' || 
+    path.particleSymbol === 'CaMKII' || 
+    path.label.toLowerCase().includes('kinaz') || 
+    path.label.toLowerCase().includes('pka') || 
+    path.label.toLowerCase().includes('fosforylac') || 
+    path.label.toLowerCase().includes('defosforylac') || 
+    path.label.toLowerCase().includes('hamowanie') || 
+    path.label.toLowerCase().includes('ras-raf') || 
+    path.label.toLowerCase().includes('mapk') || 
+    path.label.toLowerCase().includes('mtor') || 
+    path.label.toLowerCase().includes('plcy') || 
+    path.label.toLowerCase().includes('plcγ') || 
+    path.label.toLowerCase().includes('pp1') || 
+    path.label.toLowerCase().includes('pp2b') || 
+    path.label.toLowerCase().includes('kalcyneur');
+
+  const isIon = 
+    path.flowType === 'ion_flow' || 
+    path.substance === 'ca2' || 
+    path.substance === 'cl' || 
+    path.substance === 'k' ||
+    path.particleSymbol === 'Ca²⁺' ||
+    path.particleSymbol === 'Cl⁻' ||
+    path.particleSymbol === 'K⁺' ||
+    path.particleSymbol === 'Na⁺';
+
+  const isSecondMessenger = 
+    path.substance === 'camp' || 
+    path.substance === 'ip3' || 
+    path.substance === '2ag' || 
+    path.flowType === 'retrograde';
+
+  const isGProtein = 
+    path.substance === 'g_protein' && !isKinaseOrEnzyme;
+
+  // 1. KINASES & MACROMOLECULAR PHOSPHORYLATION COMPLEXES (Slowest kinetics, largest radius)
+  if (isKinaseOrEnzyme) {
+    return {
+      type: 'protein_kinase',
+      label: 'Kinaza białkowa / Kaskada enzymatyczna (pERK, PKA, mTOR, PLCγ)',
+      shortLabel: 'Kinaza białkowa',
+      // High molecular weight (~40-90 kDa), slower conformational activation & catalytic docking:
+      speedFactor: 2.25, // Slower animation duration
+      leadRadius: 10.5, // Distinctly larger macromolecular radius
+      secondaryRadius: 8.2,
+      trailRadius: 6.0,
+      quiescentRadius: 4.5,
+      strokeWidth: 2.4,
+      glowFilter: 'url(#glow-indigo)',
+      kineticsDescription: 'Wolna kinetyka enzymatyczna (~sekundy do minut): translokacja kinaz, fosforylacja substratów i docking.',
+    };
+  }
+
+  // 2. IONS (Fastest kinetics, smallest compact radius)
+  if (isIon) {
+    const isCa2 = path.substance === 'ca2' || path.particleSymbol === 'Ca²⁺';
+    return {
+      type: 'ion',
+      label: isCa2 ? 'Szybki dokomórkowy prąd Ca²⁺ (napływ przez por kanału)' : 'Prąd jonowy (Cl⁻ / K⁺ / Na⁺)',
+      shortLabel: isCa2 ? 'Jon Ca²⁺' : 'Jon',
+      // Rapid electrodiffusion through selective pore channels (sub-millisecond rate):
+      speedFactor: 0.52, // Fastest animation duration
+      leadRadius: isCa2 ? 4.8 : 4.2, // Smallest, compact elementary ion radius
+      secondaryRadius: 3.4,
+      trailRadius: 2.4,
+      quiescentRadius: 1.8,
+      strokeWidth: 1.4,
+      glowFilter: isCa2 ? 'url(#glow-gold)' : undefined,
+      kineticsDescription: 'Bardzo szybka kinetyka milisekundowa: przepływ jonów przez selektywny por kanału.',
+    };
+  }
+
+  // 3. SECOND MESSENGERS & RETROGRADE LIPIDS (Fast-intermediate, medium radius)
+  if (isSecondMessenger) {
+    const isCamp = path.substance === 'camp';
+    return {
+      type: 'second_messenger',
+      label: isCamp ? 'Drugi przekaźnik cAMP (cytozolowa dyfuzja)' : 'Drugi przekaźnik / Lipid (IP₃ / 2-AG)',
+      shortLabel: 'II Przekaźnik',
+      speedFactor: 0.85, // Szybka dyfuzja cząsteczkowa w cytozolu
+      leadRadius: 6.5,
+      secondaryRadius: 5.2,
+      trailRadius: 3.8,
+      quiescentRadius: 3.0,
+      strokeWidth: 1.8,
+      glowFilter: isCamp ? 'url(#glow-indigo)' : undefined,
+      kineticsDescription: 'Średnio-szybka kinetyka (sekundy): dyfuzja rozpuszczalnych małych cząsteczek w cytozolu lub błonie.',
+    };
+  }
+
+  // 4. G-PROTEIN SUBUNITS (Slower lateral membrane diffusion, medium-large radius)
+  if (isGProtein) {
+    return {
+      type: 'g_protein',
+      label: 'Podjednostka białka G (Gα-GTP / Gβγ) — translokacja 2D',
+      shortLabel: 'Białko G',
+      speedFactor: 1.45, // Wolniejsza translokacja lateralna w płynnym dwuwarstwie lipidowym
+      leadRadius: 8.0,
+      secondaryRadius: 6.4,
+      trailRadius: 4.8,
+      quiescentRadius: 3.6,
+      strokeWidth: 1.8,
+      glowFilter: 'url(#glow-indigo)',
+      kineticsDescription: 'Umiarkowanie wolna kinetyka: boczna dyfuzja podjednostek białek G w płynnej błonie komórkowej.',
+    };
+  }
+
+  // 5. NEUROTRANSMITTERS & LIGANDS (Baseline diffusion & synaptic cleft binding)
+  return {
+    type: 'neurotransmitter',
+    label: path.substance === 'bdnf' ? 'Dimer neurotrofiny BDNF' : 'Neuroprzekaźnik w szczelinie synaptycznej',
+    shortLabel: 'Neuroprzekaźnik',
+    speedFactor: path.substance === 'bdnf' ? 1.25 : 1.0,
+    leadRadius: path.substance === 'bdnf' ? 7.8 : 6.8,
+    secondaryRadius: path.substance === 'bdnf' ? 6.0 : 5.2,
+    trailRadius: 4.0,
+    quiescentRadius: 3.2,
+    strokeWidth: 1.6,
+    glowFilter: undefined,
+    kineticsDescription: 'Kinetyka uwalniania pęcherzykowego i dyfuzji w szczelinie synaptycznej (milisekundy do sekund).',
+  };
+}
+
 export interface DownstreamEffectorFeedback {
   id: string;
   name: string;
@@ -258,7 +412,7 @@ export const CASCADE_VISUAL_REGISTRY: Record<string, CascadeVisualData> = {
         flowType: 'molecule_movement',
         substance: 'camp',
         d: 'M 190,230 Q 200,270 220,285',
-        particleColor: '#fbbf24',
+        particleColor: '#3b82f6',
         particleSymbol: 'cAMP',
         particleCount: 7,
         speedSec: 1.4,
@@ -328,7 +482,7 @@ export const CASCADE_VISUAL_REGISTRY: Record<string, CascadeVisualData> = {
         flowType: 'ion_flow',
         substance: 'ca2',
         d: 'M 580,30 L 580,170',
-        particleColor: '#facc15',
+        particleColor: '#10b981',
         particleSymbol: 'Ca²⁺',
         particleCount: 8,
         speedSec: 1.2,
@@ -1031,7 +1185,7 @@ export const CASCADE_VISUAL_REGISTRY: Record<string, CascadeVisualData> = {
         flowType: 'ion_flow',
         substance: 'ca2',
         d: 'M 350,350 Q 420,300 400,240',
-        particleColor: '#facc15',
+        particleColor: '#10b981',
         particleSymbol: 'Ca²⁺',
         particleCount: 9,
         speedSec: 1.1,

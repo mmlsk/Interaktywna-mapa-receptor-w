@@ -1,0 +1,993 @@
+import React, { useState } from 'react';
+import { 
+  CascadeVisualData, 
+  CascadeNode, 
+  FlowPath,
+  getMessengerKineticProfile,
+  MessengerKineticProfile 
+} from '../data/cascadeAnimationData';
+import { AnimatedMoleculesLegend } from './AnimatedMoleculesLegend';
+import { CascadeKineticsOverlay } from './CascadeKineticsOverlay';
+import { 
+  Zap, 
+  Activity, 
+  Eye, 
+  Play, 
+  Pause, 
+  RotateCcw, 
+  Sparkles,
+  Info,
+  Layers,
+  ArrowRight,
+  ShieldAlert,
+  Gauge
+} from 'lucide-react';
+
+interface CascadeDiagramCanvasProps {
+  visualData: CascadeVisualData;
+  activeStepIdx: number; // 0-indexed
+  onSelectNode?: (node: CascadeNode) => void;
+  speedMultiplier: number;
+  isAnimating?: boolean;
+  canvasId?: string;
+  className?: string;
+}
+
+export const CascadeDiagramCanvas: React.FC<CascadeDiagramCanvasProps> = ({
+  visualData,
+  activeStepIdx,
+  onSelectNode,
+  speedMultiplier,
+  isAnimating: isAnimatingProp,
+  canvasId,
+  className
+}) => {
+  const [internalIsAnimating, setInternalIsAnimating] = useState<boolean>(true);
+  const isAnimating = isAnimatingProp !== undefined ? isAnimatingProp : internalIsAnimating;
+  const setIsAnimating = setInternalIsAnimating;
+  const animateFlow = isAnimating;
+  const setAnimateFlow = setInternalIsAnimating;
+  const [showLabels, setShowLabels] = useState<boolean>(true);
+  const [showKineticsOverlay, setShowKineticsOverlay] = useState<boolean>(true);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
+
+  const currentStepNumber = activeStepIdx + 1; // 1-indexed
+
+  // Helper to check if a path is active in the current step
+  const isPathActive = (path: FlowPath) => {
+    return path.activeSteps.includes(currentStepNumber);
+  };
+
+  // Helper to check if a node is active in the current step
+  const isNodeActive = (node: CascadeNode) => {
+    return node.activeSteps.includes(currentStepNumber);
+  };
+
+  const activeMetrics = visualData.synapticMetricsByStep[currentStepNumber] || {
+    membranePotentialMv: -70,
+    calciumIntracellularNm: 100,
+    netSynapticState: 'Stan spoczynkowy',
+    clinicalNote: ''
+  };
+
+  const containerDomId = canvasId || `cascade-svg-canvas-${visualData.cascadeId}`;
+
+  return (
+    <div id={containerDomId} className={`relative bg-slate-950 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden select-none ${className || ''}`}>
+      {/* Top Telemetry & Controls Bar */}
+      <div className="px-4 py-3 bg-slate-900/90 backdrop-blur-md border-b border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2">
+          <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+          <span className="font-bold text-slate-200 tracking-wide flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5 text-indigo-400" />
+            Biofizyczny Schemat Kaskady Transdukcji
+          </span>
+          <span className="px-2 py-0.5 rounded-md bg-indigo-950/80 text-indigo-300 border border-indigo-800/60 font-mono text-[10px]">
+            Etap {currentStepNumber}
+          </span>
+        </div>
+
+        {/* View toggles */}
+        <div className="flex items-center gap-2">
+          <button
+            id={canvasId ? `${canvasId}-animate-flow-toggle` : 'cascade-diagram-animate-flow-toggle'}
+            onClick={() => setAnimateFlow(!animateFlow)}
+            className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[11px] font-medium ${
+              animateFlow 
+                ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 shadow-xs' 
+                : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+            title="Włącz / Wyłącz animację przepływu cząsteczek i jonów (Animate Flow)"
+            aria-pressed={animateFlow}
+          >
+            <Activity className={`w-3 h-3 ${animateFlow ? 'text-indigo-400 animate-pulse' : ''}`} />
+            <span>Animate Flow: {animateFlow ? 'WŁ' : 'WYŁ'}</span>
+          </button>
+
+          <button
+            onClick={() => setShowLabels(!showLabels)}
+            className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[11px] font-medium ${
+              showLabels 
+                ? 'bg-slate-800 text-slate-200 border-slate-700' 
+                : 'bg-slate-900 text-slate-500 border-slate-800'
+            }`}
+            title="Przełącz etykiety molekularne"
+          >
+            <Eye className="w-3 h-3" />
+            <span>Etykiety</span>
+          </button>
+
+          <button
+            id={canvasId ? `${canvasId}-kinetics-toggle` : 'cascade-diagram-kinetics-toggle'}
+            onClick={() => setShowKineticsOverlay(!showKineticsOverlay)}
+            className={`px-2.5 py-1 rounded-lg border transition-all flex items-center gap-1.5 text-[11px] font-medium ${
+              showKineticsOverlay 
+                ? 'bg-indigo-600/30 text-indigo-200 border-indigo-500/50 shadow-xs' 
+                : 'bg-slate-800/60 text-slate-400 border-slate-700 hover:text-slate-200'
+            }`}
+            title="Przełącz nakładkę parametrów kinetycznych (latencja sygnału i prawdopodobieństwo aktywacji)"
+            aria-pressed={showKineticsOverlay}
+          >
+            <Gauge className="w-3 h-3 text-indigo-400" />
+            <span>Kinetyka: {showKineticsOverlay ? 'WŁ' : 'WYŁ'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Pathway Kinetics Legend & Particle Velocity Feedback */}
+      <div className="px-4 py-2 bg-slate-950/90 border-b border-slate-800/60 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+        <div className="flex items-center gap-1.5 font-medium text-slate-300">
+          <Zap className="w-3.5 h-3.5 text-amber-400" />
+          <span className="font-semibold text-slate-200">Kinetyka biofizyczna przekaźników:</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-3.5">
+          {/* Ions */}
+          <div className="flex items-center gap-1.5" title="Szybki napływ porami kanałów (ms). Krótki czas trwania animacji, mały promień cząstki r=4.4-5.0px">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block shadow-[0_0_8px_#f59e0b]" />
+            <span className="text-amber-300 font-mono font-medium">Jony (Ca²⁺/Cl⁻/K⁺)</span>
+            <span className="text-[10px] text-slate-400 font-mono bg-amber-950/40 px-1.5 py-0.5 rounded border border-amber-900/40">~0.58× czas • r=4.5px (najszybsze)</span>
+          </div>
+          {/* Second messengers */}
+          <div className="flex items-center gap-1.5" title="Cytoplazmatyczna dyfuzja małych cząsteczek (sekundy). Promień r=6.5px">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 inline-block shadow-[0_0_6px_#10b981]" />
+            <span className="text-emerald-300 font-mono font-medium">II Przekaźniki (cAMP/IP₃)</span>
+            <span className="text-[10px] text-slate-400 font-mono bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-900/40">~0.85× czas • r=6.5px</span>
+          </div>
+          {/* G-Protein */}
+          <div className="flex items-center gap-1.5" title="Translokacja 2D w błonie komórkowej. Promień r=8.0px">
+            <span className="w-3 h-3 rounded-full bg-indigo-400 inline-block" />
+            <span className="text-indigo-300 font-mono font-medium">Białka G (Gα/Gβγ)</span>
+            <span className="text-[10px] text-slate-400 font-mono bg-indigo-950/40 px-1.5 py-0.5 rounded border border-indigo-900/40">~1.45× czas • r=8.0px</span>
+          </div>
+          {/* Kinases */}
+          <div className="flex items-center gap-1.5" title="Duże kompleksy enzymatyczne (40-90 kDa), translokacja kinaz i kaskada fosforylacji. Najdłuższy czas trwania, duży promień r=9.5px">
+            <span className="w-3.5 h-3.5 rounded-full bg-purple-400 inline-block shadow-[0_0_8px_#c084fc]" />
+            <span className="text-purple-300 font-mono font-medium">Kinazy białkowe (pERK/PKA)</span>
+            <span className="text-[10px] text-slate-400 font-mono bg-purple-950/40 px-1.5 py-0.5 rounded border border-purple-900/40">~2.1× czas • r=9.5px (najwolniejsze)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* SVG Canvas */}
+      <div className="relative w-full overflow-x-auto">
+        {/* Kinetic Parameters Overlay (Predicted Latency & Activation Probability based on Molecule Flow Duration) */}
+        {showKineticsOverlay && (
+          <CascadeKineticsOverlay
+            flowPaths={visualData.flowPaths}
+            currentStepNumber={currentStepNumber}
+            totalSteps={Object.keys(visualData.synapticMetricsByStep).length || 5}
+            speedMultiplier={speedMultiplier}
+            cascadeId={canvasId || visualData.cascadeId}
+            className="top-3 left-3 sm:left-4"
+          />
+        )}
+
+        {/* Dynamic Floating Molecules Legend Overlay (Visible when isAnimating is true) */}
+        <AnimatedMoleculesLegend
+          flowPaths={visualData.flowPaths}
+          currentStepNumber={currentStepNumber}
+          isAnimating={animateFlow}
+          canvasId={canvasId || visualData.cascadeId}
+          className="top-3 right-3 sm:right-4"
+        />
+
+        <svg
+          viewBox={`0 0 760 ${visualData.canvasHeight}`}
+          className="w-full h-auto min-w-[700px] block"
+          style={{ background: 'radial-gradient(ellipse at 50% 30%, #0f172a 0%, #020617 100%)' }}
+        >
+          {/* DEFINITIONS: Gradients, Filters, Markers */}
+          <defs>
+            {/* Glow filters */}
+            <filter id="glow-gold" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <filter id="glow-cyan" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <filter id="glow-indigo" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <filter id="glow-rose" x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur in="SourceGraphic" stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            {/* Linear gradients for membranes */}
+            <linearGradient id="cleft-gradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.08" />
+              <stop offset="50%" stopColor="#818cf8" stopOpacity="0.14" />
+              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.08" />
+            </linearGradient>
+
+            <linearGradient id="lipid-bilayer-grad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0%" stopColor="#334155" />
+              <stop offset="50%" stopColor="#475569" />
+              <stop offset="100%" stopColor="#334155" />
+            </linearGradient>
+
+            {/* Pattern for lipid head groups */}
+            <pattern id="lipid-bilayer-pattern" width="16" height="14" patternUnits="userSpaceOnUse">
+              <circle cx="4" cy="4" r="2.8" fill="#64748b" opacity="0.6" />
+              <circle cx="12" cy="4" r="2.8" fill="#64748b" opacity="0.6" />
+              <line x1="4" y1="6.8" x2="4" y2="12" stroke="#475569" strokeWidth="1" strokeDasharray="1,1" />
+              <line x1="12" y1="6.8" x2="12" y2="12" stroke="#475569" strokeWidth="1" strokeDasharray="1,1" />
+            </pattern>
+
+            {/* Arrow markers for directed paths */}
+            <marker id="arrow-active" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M 0 1 L 9 5 L 0 9 z" fill="#6366f1" />
+            </marker>
+
+            {/* --- ANIMATED SVG PATH MARKERS ('PARTICLES') --- */}
+            {/* Ca2+ Ion Particle Marker (Green) */}
+            <marker
+              id="particle-marker-ca2"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="14"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#10b981" stroke="#059669" strokeWidth="1.5">
+                <animate attributeName="r" values="7.5;9.5;7.5" dur="1.2s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.85;1;0.85" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <text x="12" y="15" textAnchor="middle" fontSize="7" fontWeight="900" fill="#064e3b" fontFamily="monospace">
+                Ca²⁺
+              </text>
+            </marker>
+
+            {/* cAMP Molecule Particle Marker (Blue) */}
+            <marker
+              id="particle-marker-camp"
+              viewBox="0 0 28 28"
+              refX="14"
+              refY="14"
+              markerWidth="16"
+              markerHeight="16"
+              orient="auto"
+            >
+              <circle cx="14" cy="14" r="9.5" fill="#3b82f6" stroke="#1d4ed8" strokeWidth="1.5">
+                <animate attributeName="r" values="8.5;11;8.5" dur="1.3s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="0.85;1;0.85" dur="1.3s" repeatCount="indefinite" />
+              </circle>
+              <text x="14" y="16.5" textAnchor="middle" fontSize="6.2" fontWeight="900" fill="#1e3a8a" fontFamily="monospace">
+                cAMP
+              </text>
+            </marker>
+
+            {/* IP3 Molecule Particle Marker */}
+            <marker
+              id="particle-marker-ip3"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="14"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#06b6d4" stroke="#0891b2" strokeWidth="1.5">
+                <animate attributeName="r" values="7.5;9.5;7.5" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <text x="12" y="15" textAnchor="middle" fontSize="6.5" fontWeight="900" fill="#164e63" fontFamily="monospace">
+                IP₃
+              </text>
+            </marker>
+
+            {/* 2-AG Endocannabinoid Particle Marker */}
+            <marker
+              id="particle-marker-2ag"
+              viewBox="0 0 26 26"
+              refX="13"
+              refY="13"
+              markerWidth="15"
+              markerHeight="15"
+              orient="auto"
+            >
+              <circle cx="13" cy="13" r="9.5" fill="#34d399" stroke="#059669" strokeWidth="1.5">
+                <animate attributeName="r" values="8.5;10.5;8.5" dur="1.4s" repeatCount="indefinite" />
+              </circle>
+              <text x="13" y="16" textAnchor="middle" fontSize="6.2" fontWeight="900" fill="#064e3b" fontFamily="monospace">
+                2-AG
+              </text>
+            </marker>
+
+            {/* K+ Ion Particle Marker */}
+            <marker
+              id="particle-marker-k"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="14"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#c084fc" stroke="#9333ea" strokeWidth="1.5">
+                <animate attributeName="r" values="7.5;9.5;7.5" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <text x="12" y="15" textAnchor="middle" fontSize="7" fontWeight="900" fill="#581c87" fontFamily="monospace">
+                K⁺
+              </text>
+            </marker>
+
+            {/* Cl- Ion Particle Marker */}
+            <marker
+              id="particle-marker-cl"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="14"
+              markerHeight="14"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#fb7185" stroke="#e11d48" strokeWidth="1.5">
+                <animate attributeName="r" values="7.5;9.5;7.5" dur="1.2s" repeatCount="indefinite" />
+              </circle>
+              <text x="12" y="15" textAnchor="middle" fontSize="7" fontWeight="900" fill="#881337" fontFamily="monospace">
+                Cl⁻
+              </text>
+            </marker>
+
+            {/* Dopamine Particle Marker */}
+            <marker
+              id="particle-marker-dopamine"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="13"
+              markerHeight="13"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#60a5fa" stroke="#2563eb" strokeWidth="1.5" />
+              <text x="12" y="15" textAnchor="middle" fontSize="6.5" fontWeight="900" fill="#1e3a8a" fontFamily="monospace">
+                DA
+              </text>
+            </marker>
+
+            {/* Glutamate Particle Marker */}
+            <marker
+              id="particle-marker-glutamate"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="13"
+              markerHeight="13"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#38bdf8" stroke="#0284c7" strokeWidth="1.5" />
+              <text x="12" y="15" textAnchor="middle" fontSize="6.2" fontWeight="900" fill="#0c4a6e" fontFamily="monospace">
+                Glu
+              </text>
+            </marker>
+
+            {/* GABA Particle Marker */}
+            <marker
+              id="particle-marker-gaba"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="13"
+              markerHeight="13"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#f43f5e" stroke="#be123c" strokeWidth="1.5" />
+              <text x="12" y="15" textAnchor="middle" fontSize="6.2" fontWeight="900" fill="#4c0519" fontFamily="monospace">
+                GABA
+              </text>
+            </marker>
+
+            {/* BDNF Particle Marker */}
+            <marker
+              id="particle-marker-bdnf"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="13"
+              markerHeight="13"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#34d399" stroke="#059669" strokeWidth="1.5" />
+              <text x="12" y="15" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#064e3b" fontFamily="monospace">
+                BDNF
+              </text>
+            </marker>
+
+            {/* G-protein / Kinase translocation marker */}
+            <marker
+              id="particle-marker-g_protein"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="12"
+              markerHeight="12"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="7.5" fill="#a855f7" stroke="#7e22ce" strokeWidth="1.2" />
+              <text x="12" y="15" textAnchor="middle" fontSize="6" fontWeight="900" fill="#3b0764" fontFamily="monospace">
+                Gα
+              </text>
+            </marker>
+
+            {/* ERK Particle Marker */}
+            <marker
+              id="particle-marker-erk"
+              viewBox="0 0 24 24"
+              refX="12"
+              refY="12"
+              markerWidth="13"
+              markerHeight="13"
+              orient="auto"
+            >
+              <circle cx="12" cy="12" r="8.5" fill="#ec4899" stroke="#be185d" strokeWidth="1.5" />
+              <text x="12" y="15" textAnchor="middle" fontSize="5.5" fontWeight="900" fill="#500724" fontFamily="monospace">
+                pERK
+              </text>
+            </marker>
+          </defs>
+
+          {/* BACKGROUND COMPARTMENTS */}
+          {/* Presynaptic Compartment (Top) */}
+          <rect
+            x="20"
+            y="12"
+            width="720"
+            height={visualData.cleftY - 35}
+            rx="16"
+            fill="#0b1329"
+            stroke="#1e293b"
+            strokeWidth="1.5"
+            strokeDasharray="4,4"
+          />
+          <text x="36" y="32" fill="#64748b" fontSize="11" fontWeight="700" letterSpacing="0.08em" className="uppercase font-mono">
+            Przedział Presynaptyczny (Kolbka Aksonalna / Terminal)
+          </text>
+
+          {/* Synaptic Cleft (~20 nm Zone) */}
+          <rect
+            x="20"
+            y={visualData.cleftY - 25}
+            width="720"
+            height="50"
+            fill="url(#cleft-gradient)"
+            stroke="#38bdf8"
+            strokeWidth="0.8"
+            strokeDasharray="2,4"
+            opacity="0.75"
+          />
+          <text x="36" y={visualData.cleftY + 6} fill="#38bdf8" fontSize="10" fontWeight="700" letterSpacing="0.05em" className="font-mono">
+            SZCZELINA SYNAPTYCZNA (~20-25 nm) • Płyn Zewnątrzkomórkowy
+          </text>
+
+          {/* Postsynaptic Lipid Bilayer */}
+          <rect
+            x="20"
+            y={visualData.cleftY + 25}
+            width="720"
+            height="18"
+            fill="url(#lipid-bilayer-pattern)"
+            stroke="#475569"
+            strokeWidth="1"
+            rx="4"
+          />
+          <text x="590" y={visualData.cleftY + 38} fill="#94a3b8" fontSize="9" fontWeight="600" className="font-mono">
+            Dwuwarstwa Lipidowa
+          </text>
+
+          {/* Postsynaptic Cytosol & Dendritic Spine Compartment */}
+          <rect
+            x="20"
+            y={visualData.cleftY + 45}
+            width="720"
+            height={visualData.canvasHeight - visualData.cleftY - 60}
+            rx="16"
+            fill="#030712"
+            stroke="#1e293b"
+            strokeWidth="1.5"
+          />
+          <text x="36" y={visualData.canvasHeight - 24} fill="#475569" fontSize="11" fontWeight="700" letterSpacing="0.08em" className="uppercase font-mono">
+            Przedział Postsynaptyczny (Kolec Dendrytyczny / Cytozol / PSD-95)
+          </text>
+
+          {/* PSD Scaffold Accent Bar */}
+          <rect
+            x="60"
+            y={visualData.cleftY + 44}
+            width="640"
+            height="4"
+            fill="#4338ca"
+            rx="2"
+            opacity="0.8"
+          />
+
+          {/* ------------------------------------------------------------- */}
+          {/* FLOW PATHS: Render under nodes so nodes appear crisp on top */}
+          {/* ------------------------------------------------------------- */}
+          {visualData.flowPaths.map((path) => {
+            const isActive = isPathActive(path);
+            const isRetrograde = path.flowType === 'retrograde';
+            const strokeClass = (animateFlow && isActive) 
+              ? isRetrograde 
+                ? 'animate-svg-flow-reverse' 
+                : speedMultiplier > 1 
+                ? 'animate-svg-flow-fast' 
+                : speedMultiplier < 1 
+                ? 'animate-svg-flow-slow' 
+                : 'animate-svg-flow'
+              : '';
+
+            const pathMarker = path.particleColor === '#facc15' || path.particleColor === '#fbbf24' 
+              ? 'url(#arrow-gold)' 
+              : path.particleColor === '#06b6d4' || path.particleColor === '#38bdf8' 
+              ? 'url(#arrow-cyan)' 
+              : path.particleColor === '#ef4444' || path.particleColor === '#f43f5e'
+              ? 'url(#arrow-rose)'
+              : path.particleColor === '#34d399' || path.particleColor === '#84cc16'
+              ? 'url(#arrow-green)'
+              : 'url(#arrow-active)';
+
+            const profile = getMessengerKineticProfile(path);
+            const durationSec = Math.max(0.42, Number(((path.speedSec * profile.speedFactor) / speedMultiplier).toFixed(2)));
+
+            return (
+              <g key={path.id} id={`path-group-${path.id}`}>
+                {/* Glow underlay track */}
+                {isActive && (
+                  <path
+                    d={path.d}
+                    fill="none"
+                    stroke={path.particleColor}
+                    strokeWidth={profile.type === 'protein_kinase' ? 8 : (profile.type === 'ion' ? 5 : 6)}
+                    strokeOpacity="0.25"
+                    strokeLinecap="round"
+                    filter={profile.glowFilter || "url(#glow-indigo)"}
+                  />
+                )}
+
+                {/* Base guide line */}
+                <path
+                  id={`molecule-path-${path.id}`}
+                  d={path.d}
+                  fill="none"
+                  stroke={isActive ? path.particleColor : '#334155'}
+                  strokeWidth={isActive ? (profile.type === 'protein_kinase' ? 3.5 : (profile.type === 'ion' ? 2.2 : 2.8)) : 1.2}
+                  strokeOpacity={isActive ? 0.95 : 0.35}
+                  strokeDasharray={isActive ? (animateFlow ? '8 6' : '4 4') : '3 3'}
+                  strokeLinecap="round"
+                  className={strokeClass}
+                  style={{
+                    animationDuration: `${Math.max(0.5, durationSec * 0.75).toFixed(2)}s`
+                  }}
+                  markerEnd={(animateFlow && isActive) ? `url(#particle-marker-${path.substance})` : undefined}
+                />
+
+                {/* INJECTION OF ANIMATED <circle> ELEMENTS TRAVELLING ALONG SVG PATHS WHEN isAnimating IS TRUE */}
+                {isAnimating && (
+                  <g id={`canvas-flow-circles-${path.id}`}>
+                    {/* Active Step: Prominent multi-particle stream of signaling molecules */}
+                    {isActive && (
+                      <>
+                        {/* 1. Leading signaling molecule circle (e.g. Ca2+ or cAMP) */}
+                        <circle
+                          id={`canvas-flow-circle-${path.id}-lead`}
+                          cx={0}
+                          cy={0}
+                          r={profile.leadRadius}
+                          fill={path.particleColor}
+                          stroke="#0f172a"
+                          strokeWidth={profile.strokeWidth}
+                          filter={profile.glowFilter}
+                          className={`animate-circle-along-path ${isRetrograde ? 'animate-reverse' : ''} opacity-95`}
+                          offset-path={`path("${path.d}")`}
+                          style={{
+                            offsetPath: `path("${path.d}")`,
+                            WebkitOffsetPath: `path("${path.d}")`,
+                            ['offset-path' as any]: `path("${path.d}")`,
+                            animationDuration: `${durationSec}s`,
+                            ['animation-duration' as any]: `${durationSec}s`,
+                            animationDelay: '0s',
+                          }}
+                        >
+                          <animateMotion
+                            path={path.d}
+                            dur={`${durationSec}s`}
+                            repeatCount="indefinite"
+                            keyPoints={isRetrograde ? "1;0" : "0;1"}
+                            keyTimes="0;1"
+                          />
+                        </circle>
+
+                        {/* 2. Staggered secondary signaling molecule circle */}
+                        <circle
+                          id={`canvas-flow-circle-${path.id}-secondary`}
+                          cx={0}
+                          cy={0}
+                          r={profile.secondaryRadius}
+                          fill={path.particleColor}
+                          stroke="#0f172a"
+                          strokeWidth={Math.max(1, profile.strokeWidth - 0.4)}
+                          className={`animate-circle-along-path ${isRetrograde ? 'animate-reverse' : ''} opacity-90`}
+                          offset-path={`path("${path.d}")`}
+                          style={{
+                            offsetPath: `path("${path.d}")`,
+                            WebkitOffsetPath: `path("${path.d}")`,
+                            ['offset-path' as any]: `path("${path.d}")`,
+                            animationDuration: `${durationSec}s`,
+                            ['animation-duration' as any]: `${durationSec}s`,
+                            animationDelay: `-${(durationSec * 0.35).toFixed(2)}s`,
+                          }}
+                        >
+                          <animateMotion
+                            path={path.d}
+                            dur={`${durationSec}s`}
+                            begin={`-${(durationSec * 0.35).toFixed(2)}s`}
+                            repeatCount="indefinite"
+                            keyPoints={isRetrograde ? "1;0" : "0;1"}
+                            keyTimes="0;1"
+                          />
+                        </circle>
+
+                        {/* 3. Trailing tertiary micro-pulse circle */}
+                        <circle
+                          id={`canvas-flow-circle-${path.id}-trail`}
+                          cx={0}
+                          cy={0}
+                          r={profile.trailRadius}
+                          fill={path.particleColor}
+                          stroke="#0f172a"
+                          strokeWidth="1"
+                          className={`animate-circle-along-path ${isRetrograde ? 'animate-reverse' : ''} opacity-80`}
+                          offset-path={`path("${path.d}")`}
+                          style={{
+                            offsetPath: `path("${path.d}")`,
+                            WebkitOffsetPath: `path("${path.d}")`,
+                            ['offset-path' as any]: `path("${path.d}")`,
+                            animationDuration: `${durationSec}s`,
+                            ['animation-duration' as any]: `${durationSec}s`,
+                            animationDelay: `-${(durationSec * 0.7).toFixed(2)}s`,
+                          }}
+                        >
+                          <animateMotion
+                            path={path.d}
+                            dur={`${durationSec}s`}
+                            begin={`-${(durationSec * 0.7).toFixed(2)}s`}
+                            repeatCount="indefinite"
+                            keyPoints={isRetrograde ? "1;0" : "0;1"}
+                            keyTimes="0;1"
+                          />
+                        </circle>
+
+                        {/* Molecular symbol label tracking along the path */}
+                        {showLabels && (
+                          <g>
+                            <text
+                              dy="3.5"
+                              textAnchor="middle"
+                              fill="#0f172a"
+                              fontSize={profile.type === 'protein_kinase' ? "8" : (profile.type === 'ion' ? "6.5" : "7.5")}
+                              fontWeight="900"
+                              className="font-mono pointer-events-none select-none"
+                            >
+                              {path.particleSymbol}
+                            </text>
+                            <animateMotion
+                              path={path.d}
+                              dur={`${durationSec}s`}
+                              repeatCount="indefinite"
+                              keyPoints={isRetrograde ? "1;0" : "0;1"}
+                              keyTimes="0;1"
+                            />
+                          </g>
+                        )}
+                      </>
+                    )}
+
+                    {/* Inactive paths: Gentle baseline molecular turnover circle when isAnimating is true */}
+                    {!isActive && (
+                      <circle
+                        id={`canvas-flow-circle-${path.id}-ambient`}
+                        cx={0}
+                        cy={0}
+                        r={profile.quiescentRadius}
+                        fill={path.particleColor}
+                        stroke="#0f172a"
+                        strokeWidth="0.8"
+                        className={`animate-circle-along-path ${isRetrograde ? 'animate-reverse' : ''} opacity-35`}
+                        offset-path={`path("${path.d}")`}
+                        style={{
+                          offsetPath: `path("${path.d}")`,
+                          WebkitOffsetPath: `path("${path.d}")`,
+                          ['offset-path' as any]: `path("${path.d}")`,
+                          animationDuration: `${Math.max(2.5, durationSec * 2).toFixed(2)}s`,
+                          ['animation-duration' as any]: `${Math.max(2.5, durationSec * 2).toFixed(2)}s`,
+                          animationDelay: '0s',
+                        }}
+                      >
+                        <animateMotion
+                          path={path.d}
+                          dur={`${Math.max(2.5, durationSec * 2).toFixed(2)}s`}
+                          repeatCount="indefinite"
+                          keyPoints={isRetrograde ? "1;0" : "0;1"}
+                          keyTimes="0;1"
+                        />
+                      </circle>
+                    )}
+                  </g>
+                )}
+
+                {/* Flow descriptive path label if hovered */}
+                {hoveredNodeId && (
+                  <title>{path.label}: {path.description}</title>
+                )}
+              </g>
+            );
+          })}
+
+          {/* ------------------------------------------------------------- */}
+          {/* NODES: Molecular effectors, receptors, enzymes, ion channels */}
+          {/* ------------------------------------------------------------- */}
+          {visualData.nodes.map((node) => {
+            const isActive = isNodeActive(node);
+            const isHovered = hoveredNodeId === node.id;
+            const stateInfo = node.stepStateDescriptions[currentStepNumber] || {
+              state: 'Stan spoczynkowy',
+              badge: 'SPOCZYNEK',
+              type: 'neutral'
+            };
+
+            const nodeWidth = node.width || 135;
+            const nodeHeight = node.height || 64;
+            const nodeX = node.x - nodeWidth / 2;
+            const nodeY = node.y - nodeHeight / 2;
+
+            // Badge color styling
+            let badgeBg = '#1e293b';
+            let badgeText = '#94a3b8';
+            let badgeBorder = '#334155';
+
+            if (stateInfo.type === 'active' || stateInfo.type === 'open') {
+              badgeBg = '#064e3b';
+              badgeText = '#34d399';
+              badgeBorder = '#059669';
+            } else if (stateInfo.type === 'inhibited' || stateInfo.type === 'closed') {
+              badgeBg = '#4c0519';
+              badgeText = '#fb7185';
+              badgeBorder = '#e11d48';
+            } else if (stateInfo.type === 'phosphorylated') {
+              badgeBg = '#4a044e';
+              badgeText = '#f472b6';
+              badgeBorder = '#c026d3';
+            } else if (stateInfo.type === 'primed') {
+              badgeBg = '#451a03';
+              badgeText = '#fbbf24';
+              badgeBorder = '#d97706';
+            }
+
+            return (
+              <g
+                key={node.id}
+                id={`node-${node.id}`}
+                className="cursor-pointer transition-all duration-300"
+                onMouseEnter={() => setHoveredNodeId(node.id)}
+                onMouseLeave={() => setHoveredNodeId(null)}
+                onClick={() => onSelectNode && onSelectNode(node)}
+              >
+                {/* Active Pulsing Halo Ring */}
+                {isActive && (
+                  <rect
+                    x={nodeX - 5}
+                    y={nodeY - 5}
+                    width={nodeWidth + 10}
+                    height={nodeHeight + 10}
+                    rx="18"
+                    fill="none"
+                    stroke={node.color}
+                    strokeWidth="2.5"
+                    strokeOpacity="0.8"
+                    className="animate-pulse"
+                    filter="url(#glow-cyan)"
+                  />
+                )}
+
+                {/* Node Box Frame */}
+                <rect
+                  x={nodeX}
+                  y={nodeY}
+                  width={nodeWidth}
+                  height={nodeHeight}
+                  rx="14"
+                  fill={isActive ? '#0f172a' : '#090d16'}
+                  stroke={isActive ? node.color : isHovered ? '#64748b' : '#1e293b'}
+                  strokeWidth={isActive ? 2 : 1}
+                  className="transition-colors shadow-lg"
+                />
+
+                {/* Type Accent Pill / Icon Bar */}
+                <rect
+                  x={nodeX + 8}
+                  y={nodeY + 8}
+                  width="5"
+                  height={nodeHeight - 16}
+                  rx="2.5"
+                  fill={node.color}
+                />
+
+                {/* Node Primary Label */}
+                <text
+                  x={nodeX + 18}
+                  y={nodeY + 22}
+                  fill="#f8fafc"
+                  fontSize="10.5"
+                  fontWeight="800"
+                  className="font-sans"
+                >
+                  {node.label.length > 20 ? node.label.substring(0, 19) + '…' : node.label}
+                </text>
+
+                {/* Node Sublabel */}
+                {node.sublabel && (
+                  <text
+                    x={nodeX + 18}
+                    y={nodeY + 34}
+                    fill="#94a3b8"
+                    fontSize="8.5"
+                    fontWeight="500"
+                    className="font-sans"
+                  >
+                    {node.sublabel}
+                  </text>
+                )}
+
+                {/* Real-time State Badge */}
+                <g transform={`translate(${nodeX + 18}, ${nodeY + 41})`}>
+                  <rect
+                    x="0"
+                    y="0"
+                    width={nodeWidth - 26}
+                    height="16"
+                    rx="4"
+                    fill={badgeBg}
+                    stroke={badgeBorder}
+                    strokeWidth="0.8"
+                  />
+                  <text
+                    x={(nodeWidth - 26) / 2}
+                    y="11.5"
+                    textAnchor="middle"
+                    fill={badgeText}
+                    fontSize="7.5"
+                    fontWeight="800"
+                    letterSpacing="0.04em"
+                    className="font-mono uppercase"
+                  >
+                    {stateInfo.badge}
+                  </text>
+                </g>
+
+                {/* Tooltip on hover */}
+                {isHovered && (
+                  <title>
+                    {node.label} ({node.sublabel})&#10;Stan: {stateInfo.state}&#10;Status: {stateInfo.badge}
+                  </title>
+                )}
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      {/* Real-time Synaptic Microdomain Status Footer */}
+      <div className="p-4 bg-slate-900/95 border-t border-slate-800 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+        {/* Membrane Potential Readout */}
+        <div className="flex items-center gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+          <div className="w-9 h-9 rounded-lg bg-indigo-950 flex items-center justify-center text-indigo-400 font-bold border border-indigo-800 shrink-0">
+            <Activity className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Potencjał Błony (Vm)
+            </span>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-base font-black font-mono ${
+                activeMetrics.membranePotentialMv < -70 
+                  ? 'text-purple-400' 
+                  : activeMetrics.membranePotentialMv > -60 
+                  ? 'text-amber-400' 
+                  : 'text-slate-200'
+              }`}>
+                {activeMetrics.membranePotentialMv} mV
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {activeMetrics.membranePotentialMv < -70 
+                  ? '(Hiperpolaryzacja)' 
+                  : activeMetrics.membranePotentialMv > -60 
+                  ? '(Depolaryzacja)' 
+                  : '(Spoczynek)'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Intracellular Calcium Readout */}
+        <div className="flex items-center gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+          <div className="w-9 h-9 rounded-lg bg-amber-950/60 flex items-center justify-center text-amber-400 font-bold border border-amber-800/80 shrink-0">
+            <Zap className="w-5 h-5" />
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Wapń Cytozolowy [Ca²⁺]i
+            </span>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-base font-black font-mono ${
+                activeMetrics.calciumIntracellularNm > 300 
+                  ? 'text-amber-300' 
+                  : 'text-slate-200'
+              }`}>
+                {activeMetrics.calciumIntracellularNm} nM
+              </span>
+              <span className="text-[10px] text-slate-500">
+                {activeMetrics.calciumIntracellularNm > 500 
+                  ? '(Mikrodomena Ca²⁺)' 
+                  : '(Poziom bazowy)'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Net Synaptic State Summary */}
+        <div className="flex items-center gap-3 bg-slate-950/80 p-3 rounded-xl border border-slate-800">
+          <div className="w-9 h-9 rounded-lg bg-emerald-950/60 flex items-center justify-center text-emerald-400 font-bold border border-emerald-800/80 shrink-0">
+            <Sparkles className="w-5 h-5" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+              Stan Czynnościowy Synapsy
+            </span>
+            <p className="text-xs font-semibold text-slate-200 truncate" title={activeMetrics.netSynapticState}>
+              {activeMetrics.netSynapticState}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};

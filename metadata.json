@@ -2,5 +2,7 @@
   "name": "Interaktywna Mapa Receptorów OUN",
   "description": "Szczegółowa interaktywna mapa receptorów chemicznych ośrodkowego układu nerwowego człowieka z analizą szlaków transdukcji, heterodimeryzacji i farmakologii.",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

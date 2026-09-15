@@ -68,3 +68,45 @@
 .animate-effector-glow {
   animation: effectorGlow 2s ease-in-out infinite;
 }
+
+/* CSS Motion Path animations for <circle> elements simulating Ca2+, cAMP, and other messenger flow along SVG <path> coordinates */
+@keyframes moveCircleAlongPath {
+  0% {
+    offset-distance: 0%;
+    -webkit-offset-distance: 0%;
+  }
+  100% {
+    offset-distance: 100%;
+    -webkit-offset-distance: 100%;
+  }
+}
+
+@keyframes moveCircleAlongPathReverse {
+  0% {
+    offset-distance: 100%;
+    -webkit-offset-distance: 100%;
+  }
+  100% {
+    offset-distance: 0%;
+    -webkit-offset-distance: 0%;
+  }
+}
+
+.animate-circle-along-path {
+  offset-rotate: 0deg;
+  -webkit-offset-rotate: 0deg;
+  animation-name: moveCircleAlongPath;
+  animation-duration: 2s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.animate-circle-along-path.animate-reverse,
+.animate-circle-along-path-reverse {
+  offset-rotate: 0deg;
+  -webkit-offset-rotate: 0deg;
+  animation-name: moveCircleAlongPathReverse;
+  animation-duration: 2s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
